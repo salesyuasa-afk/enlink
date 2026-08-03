@@ -20,6 +20,20 @@
   opacity: 0.55;
 }
 
+.generation-diagnostics {
+  color: var(--muted);
+  font-size: 0.7rem;
+  grid-column: 1 / -1;
+  line-height: 1.6;
+  margin: 9px 0 0;
+  text-align: center;
+}
+
+.generation-diagnostics.is-ready {
+  color: #29634f;
+  font-weight: 700;
+}
+
 .collaboration-proposals {
   background: linear-gradient(120deg, #fffdf8, #f7faf8);
   border: 1px solid #b9996266;

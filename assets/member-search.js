@@ -121,33 +121,66 @@
     const status = card.querySelector(".member-search__status");
     if (!group || selects().length < 3) return false;
 
+    const selectAndConfirm = async (index, value, optionTimeout = 8000) => {
+      const expected = String(value);
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const select = await waitFor(() => {
+          const candidate = selects()[index];
+          return candidate && [...candidate.options].some(
+            (option) => String(option.value) === expected,
+          )
+            ? candidate
+            : null;
+        }, optionTimeout);
+        if (!select) continue;
+        setNativeValue(select, expected);
+        const confirmed = await waitFor(
+          () => String(selects()[index]?.value ?? "") === expected,
+          3000,
+        );
+        if (confirmed) return selects()[index];
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+      return null;
+    };
+
     status.textContent = "選択中…";
-    setNativeValue(selects()[0], group.label);
+    const regionSelect = await selectAndConfirm(0, group.label);
+    if (!regionSelect) {
+      status.textContent = "地域を選択できませんでした。もう一度お試しください。";
+      return false;
+    }
     const chapterSelect = await waitFor(() => {
       const select = selects()[1];
-      return select && [...select.options].some((option) => option.value === member.chapter)
+      return select && [...select.options].some(
+        (option) => String(option.value) === String(member.chapter),
+      )
         ? select
         : null;
-    });
+    }, 8000);
     if (!chapterSelect) {
       status.textContent = "チャプターを選択できませんでした。もう一度お試しください。";
       return false;
     }
 
-    setNativeValue(chapterSelect, member.chapter);
+    if (!(await selectAndConfirm(1, member.chapter))) {
+      status.textContent = "チャプターの選択を確定できませんでした。もう一度お試しください。";
+      return false;
+    }
     const memberSelect = await waitFor(() => {
       const select = selects()[2];
-      return select && [...select.options].some((option) => option.value === member.id)
+      return select && [...select.options].some(
+        (option) => String(option.value) === String(member.id),
+      )
         ? select
         : null;
-    });
+    }, 8000);
     if (!memberSelect) {
       status.textContent = "メンバーを選択できませんでした。もう一度お試しください。";
       return false;
     }
 
-    setNativeValue(memberSelect, member.id);
-    const selected = await waitFor(() => selects()[2]?.value === member.id, 2500);
+    const selected = await selectAndConfirm(2, member.id);
     if (selected) {
       await new Promise((resolve) => setTimeout(resolve, 120));
       const sideIndex = [...document.querySelectorAll(".person-card")].indexOf(card);
@@ -160,7 +193,9 @@
         enhanceCollaborationProposals();
       }, 300);
     }
-    status.textContent = selected ? `${member.name}さんを選択しました` : "選択を完了できませんでした。";
+    status.textContent = selected
+      ? `${member.name}さんを選択しました`
+      : "選択を完了できませんでした。もう一度検索結果を押してください。";
     return Boolean(selected);
   };
 
@@ -383,6 +418,77 @@
     return { classic, unusual, question };
   };
 
+  const automaticReason = (left, right) => {
+    const leftCategory = profileValue(0, 0, left.category) || left.category || "専門分野";
+    const rightCategory = profileValue(1, 0, right.category) || right.category || "専門分野";
+    return `${left.name}さんの「${leftCategory}」と、${right.name}さんの「${rightCategory}」を掛け合わせることで、お互いの顧客や事業に新しい価値を生み出せる可能性があるため`;
+  };
+
+  const visitorProfileReady = (member, sideIndex) => {
+    if (!member?.isVisitor) return true;
+    return Boolean(profileValue(sideIndex, 0) && profileValue(sideIndex, 1));
+  };
+
+  const generationReadiness = () => {
+    const cards = [...document.querySelectorAll(".person-card")];
+    if (cards.length < 2) return { ready: false, message: "人物情報を読み込んでいます…" };
+    const left = selectedMember(cards[0]);
+    const right = selectedMember(cards[1]);
+    if (!left || !right) {
+      return { ready: false, message: "AさんとBさんの両方を選択してください。" };
+    }
+    if (left.id === right.id) {
+      return { ready: false, message: "AさんとBさんには別の方を選択してください。" };
+    }
+    if (!visitorProfileReady(left, 0) || !visitorProfileReady(right, 1)) {
+      return {
+        ready: false,
+        message: "ビジターの「業種・仕事内容」と「活動地域」を入力してください。",
+      };
+    }
+    const reason = document.querySelector("#reason");
+    return {
+      ready: true,
+      left,
+      right,
+      reason,
+      message: reason?.value.trim()
+        ? "生成できます。"
+        : "つなぐ理由が未入力でも、2人の職種から補って生成できます。",
+    };
+  };
+
+  const enhanceGenerationReliability = () => {
+    const button = document.querySelector(".generate-button");
+    if (!button) return;
+    let status = document.querySelector(".generation-diagnostics");
+    if (!status) {
+      status = document.createElement("p");
+      status.className = "generation-diagnostics";
+      status.setAttribute("role", "status");
+      button.after(status);
+    }
+
+    const readiness = generationReadiness();
+    button.disabled = !readiness.ready;
+    button.setAttribute("aria-disabled", String(!readiness.ready));
+    status.textContent = readiness.message;
+    status.classList.toggle("is-ready", readiness.ready);
+
+    if (!button.dataset.enlinkGenerationGuard) {
+      button.dataset.enlinkGenerationGuard = "true";
+      button.addEventListener(
+        "click",
+        () => {
+          const latest = generationReadiness();
+          if (!latest.ready || !latest.reason || latest.reason.value.trim()) return;
+          setNativeValue(latest.reason, automaticReason(latest.left, latest.right));
+        },
+        true,
+      );
+    }
+  };
+
   const proposalArticle = (label, title, bodyText, className = "") => {
     const article = document.createElement("article");
     article.className = className;
@@ -455,6 +561,7 @@
     updateMetric(cards[0] ? componentProps(cards[0]) : null);
     enhanceProfilePersistence();
     enhanceCollaborationProposals();
+    enhanceGenerationReliability();
   };
 
   const scheduleEnhance = () => {
