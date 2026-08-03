@@ -8,6 +8,7 @@
   const selectedProposalKeys = new Set();
   let enhanceQueued = false;
   let activeProposalPairKey = "";
+  let proposalRefreshTimer = 0;
 
   const normalizePart = (value) =>
     String(value ?? "")
@@ -535,8 +536,18 @@
   };
 
   const isIntroTab = () => {
-    const tabs = [...document.querySelectorAll(".message-tabs button")];
-    return tabs.findIndex((button) => button.classList.contains("is-active")) === 2;
+    const activeTab = document.querySelector(
+      '.message-tabs button[aria-selected="true"], .message-tabs button.is-active',
+    );
+    return Boolean(
+      activeTab && activeTab.textContent?.includes("お二人へ一斉送信する紹介文"),
+    );
+  };
+
+  const queueProposalRefresh = () => {
+    window.clearTimeout(proposalRefreshTimer);
+    requestAnimationFrame(refreshGeneratedProposalText);
+    proposalRefreshTimer = window.setTimeout(refreshGeneratedProposalText, 180);
   };
 
   const refreshGeneratedProposalText = () => {
@@ -602,6 +613,12 @@
       true,
     );
 
+    generatedCard.querySelectorAll(".message-tabs button").forEach((tab) => {
+      if (tab.dataset.enlinkProposalTab) return;
+      tab.dataset.enlinkProposalTab = "true";
+      tab.addEventListener("click", queueProposalRefresh);
+    });
+
     const shareButton = generatedCard.querySelector(".line-share__button");
     shareButton?.addEventListener(
       "click",
@@ -646,13 +663,15 @@
       section.setAttribute("aria-live", "polite");
       reasonCard.after(section);
     }
-    const pairKey = `${left.id}:${right.id}:${profileValue(0, 0, left.category)}:${profileValue(1, 0, right.category)}:${profileValue(0, 2)}:${profileValue(1, 2)}`;
-    if (section.dataset.pairKey === pairKey) return;
+    const pairKey = `${left.id}:${right.id}`;
+    const proposalSignature = `${pairKey}:${profileValue(0, 0, left.category)}:${profileValue(1, 0, right.category)}:${profileValue(0, 2)}:${profileValue(1, 2)}`;
+    if (section.dataset.proposalSignature === proposalSignature) return;
     if (activeProposalPairKey && activeProposalPairKey !== pairKey) {
       selectedProposalKeys.clear();
     }
     activeProposalPairKey = pairKey;
     section.dataset.pairKey = pairKey;
+    section.dataset.proposalSignature = proposalSignature;
     const proposals = createProposals(left, right);
     const heading = document.createElement("div");
     heading.className = "collaboration-proposals__heading";
@@ -672,7 +691,7 @@
       proposalArticle("question", "03", "1to1で確かめること", proposals.question),
     );
     section.replaceChildren(heading, grid);
-    refreshGeneratedProposalText();
+    queueProposalRefresh();
   };
 
   const updateMetric = (props) => {
@@ -694,6 +713,7 @@
     enhanceCollaborationProposals();
     enhanceGenerationReliability();
     enhanceGeneratedMessageActions();
+    queueProposalRefresh();
   };
 
   const scheduleEnhance = () => {
@@ -703,7 +723,12 @@
   };
 
   const observer = new MutationObserver(scheduleEnhance);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["class", "aria-selected"],
+  });
   document.addEventListener("change", scheduleEnhance, true);
   document.addEventListener("input", scheduleEnhance, true);
   if (document.readyState === "loading") {
