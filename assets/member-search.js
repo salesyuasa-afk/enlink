@@ -5,7 +5,9 @@
   const PROFILE_STORAGE_KEY = "enlink-profile-details-v2";
   const propsCache = new WeakMap();
   const indexCache = new WeakMap();
+  const selectedProposalKeys = new Set();
   let enhanceQueued = false;
+  let activeProposalPairKey = "";
 
   const normalizePart = (value) =>
     String(value ?? "")
@@ -489,17 +491,141 @@
     }
   };
 
-  const proposalArticle = (label, title, bodyText, className = "") => {
+  const proposalArticle = (key, label, title, bodyText, className = "") => {
     const article = document.createElement("article");
     article.className = className;
+    article.dataset.proposalKey = key;
     const badge = document.createElement("span");
     badge.textContent = label;
     const heading = document.createElement("h4");
     heading.textContent = title;
     const body = document.createElement("p");
     body.textContent = bodyText;
-    article.append(badge, heading, body);
+    const option = document.createElement("label");
+    option.className = "collaboration-proposals__option";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = selectedProposalKeys.has(key);
+    checkbox.setAttribute("aria-label", `${title}を紹介文に反映`);
+    const optionText = document.createElement("span");
+    optionText.textContent = "紹介文に反映";
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) selectedProposalKeys.add(key);
+      else selectedProposalKeys.delete(key);
+      article.classList.toggle("is-selected", checkbox.checked);
+      refreshGeneratedProposalText();
+    });
+    option.append(checkbox, optionText);
+    article.classList.toggle("is-selected", checkbox.checked);
+    article.append(badge, heading, body, option);
     return article;
+  };
+
+  const selectedProposalData = () => {
+    const section = document.querySelector(".collaboration-proposals");
+    if (!section) return [];
+    return [...section.querySelectorAll("article")]
+      .filter((article) => selectedProposalKeys.has(article.dataset.proposalKey))
+      .map((article) => ({
+        key: article.dataset.proposalKey,
+        title: article.querySelector("h4")?.textContent?.trim() || "提案",
+        body: article.querySelector(":scope > p")?.textContent?.trim() || "",
+      }))
+      .filter((item) => item.body);
+  };
+
+  const isIntroTab = () => {
+    const tabs = [...document.querySelectorAll(".message-tabs button")];
+    return tabs.findIndex((button) => button.classList.contains("is-active")) === 2;
+  };
+
+  const refreshGeneratedProposalText = () => {
+    const paper = document.querySelector(".generated-card .message-paper");
+    if (!paper) return;
+    const selected = selectedProposalData();
+    const existing = paper.querySelector(".generated-proposal-text");
+    if (!isIntroTab() || !selected.length) {
+      existing?.remove();
+      return;
+    }
+    const signature = JSON.stringify(selected);
+    if (existing?.dataset.signature === signature) return;
+    existing?.remove();
+
+    const block = document.createElement("div");
+    block.className = "generated-proposal-text";
+    block.dataset.signature = signature;
+    const heading = document.createElement("p");
+    heading.textContent = "【この2人から期待できること】";
+    block.append(heading);
+    selected.forEach(({ title, body }) => {
+      const paragraph = document.createElement("p");
+      paragraph.textContent = `【${title}】\n${body}`;
+      block.append(paragraph);
+    });
+
+    const closing = [...paper.children].find(
+      (element) =>
+        element.tagName === "P" &&
+        element.textContent?.includes("まずは一度、1to1"),
+    );
+    if (closing) paper.insertBefore(block, closing);
+    else paper.append(block);
+  };
+
+  const visibleMessageText = () => {
+    refreshGeneratedProposalText();
+    const paper = document.querySelector(".generated-card .message-paper");
+    return paper
+      ? [...paper.querySelectorAll(":scope > p, :scope > .generated-proposal-text > p")]
+          .map((paragraph) => paragraph.textContent?.trim())
+          .filter(Boolean)
+          .join("\n\n")
+      : "";
+  };
+
+  const enhanceGeneratedMessageActions = () => {
+    refreshGeneratedProposalText();
+    const generatedCard = document.querySelector(".generated-card");
+    if (!generatedCard || generatedCard.dataset.enlinkProposalActions) return;
+    generatedCard.dataset.enlinkProposalActions = "true";
+
+    const copyButton = generatedCard.querySelector(".generated-card__top button");
+    copyButton?.addEventListener(
+      "click",
+      (event) => {
+        if (!isIntroTab() || !selectedProposalData().length) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        navigator.clipboard?.writeText(visibleMessageText());
+      },
+      true,
+    );
+
+    const shareButton = generatedCard.querySelector(".line-share__button");
+    shareButton?.addEventListener(
+      "click",
+      async (event) => {
+        if (!isIntroTab() || !selectedProposalData().length) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const attachmentLinks = [...generatedCard.querySelectorAll(".line-share__attachments a")]
+          .map((link) => link.href)
+          .filter((href) => href && !href.startsWith("blob:"));
+        const text = [visibleMessageText(), ...attachmentLinks].filter(Boolean).join("\n\n");
+        try {
+          if (navigator.share) await navigator.share({ title: "お二人へ一斉送信する紹介文", text });
+          else {
+            await navigator.clipboard?.writeText(text);
+            window.location.href = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
+          }
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          await navigator.clipboard?.writeText(text);
+        }
+      },
+      true,
+    );
   };
 
   const enhanceCollaborationProposals = () => {
@@ -522,6 +648,10 @@
     }
     const pairKey = `${left.id}:${right.id}:${profileValue(0, 0, left.category)}:${profileValue(1, 0, right.category)}:${profileValue(0, 2)}:${profileValue(1, 2)}`;
     if (section.dataset.pairKey === pairKey) return;
+    if (activeProposalPairKey && activeProposalPairKey !== pairKey) {
+      selectedProposalKeys.clear();
+    }
+    activeProposalPairKey = pairKey;
     section.dataset.pairKey = pairKey;
     const proposals = createProposals(left, right);
     const heading = document.createElement("div");
@@ -532,16 +662,17 @@
     const title = document.createElement("h3");
     title.textContent = "この2人から期待できること";
     const note = document.createElement("small");
-    note.textContent = "職種と入力内容から考えた仮説です。事実ではなく、1to1の会話を広げる提案としてご覧ください。";
+    note.textContent = "紹介文に入れたい項目だけチェックしてください。選んだ内容は一斉送信用の紹介文へ反映されます。";
     heading.append(eyebrow, title, note);
     const grid = document.createElement("div");
     grid.className = "collaboration-proposals__grid";
     grid.append(
-      proposalArticle("01", "王道の連携案", proposals.classic),
-      proposalArticle("02", "意外なコラボ案", proposals.unusual, "is-unusual"),
-      proposalArticle("03", "1to1で確かめること", proposals.question),
+      proposalArticle("classic", "01", "王道の連携案", proposals.classic),
+      proposalArticle("unusual", "02", "意外なコラボ案", proposals.unusual, "is-unusual"),
+      proposalArticle("question", "03", "1to1で確かめること", proposals.question),
     );
     section.replaceChildren(heading, grid);
+    refreshGeneratedProposalText();
   };
 
   const updateMetric = (props) => {
@@ -562,6 +693,7 @@
     enhanceProfilePersistence();
     enhanceCollaborationProposals();
     enhanceGenerationReliability();
+    enhanceGeneratedMessageActions();
   };
 
   const scheduleEnhance = () => {
