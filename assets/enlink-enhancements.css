@@ -1,0 +1,127 @@
+.member-search__status {
+  color: var(--wine);
+  display: block;
+  font-size: 0.65rem;
+  line-height: 1.5;
+  margin-top: 7px;
+  min-height: 1.2em;
+}
+
+.member-search__results .member-search__more {
+  background: var(--cream);
+  color: var(--wine);
+  font-weight: 800;
+  justify-items: center;
+  text-align: center;
+}
+
+.member-search__results button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.collaboration-proposals {
+  background: linear-gradient(120deg, #fffdf8, #f7faf8);
+  border: 1px solid #b9996266;
+  border-radius: 18px;
+  box-shadow: 0 18px 48px #14342b0f;
+  margin-top: 26px;
+  padding: 30px;
+}
+
+.collaboration-proposals__heading {
+  align-items: end;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 1fr minmax(220px, 0.55fr);
+  margin-bottom: 22px;
+}
+
+.collaboration-proposals__heading h3 {
+  font-family: Yu Mincho, Hiragino Mincho ProN, serif;
+  font-size: 1.55rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.collaboration-proposals__heading .eyebrow {
+  grid-column: 1 / -1;
+}
+
+.collaboration-proposals__heading small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.7;
+}
+
+.collaboration-proposals__grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.collaboration-proposals article {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.collaboration-proposals article.is-unusual {
+  background: linear-gradient(145deg, #fffaf0, #fff);
+  border-color: #b9996280;
+}
+
+.collaboration-proposals article > span {
+  background: var(--rose);
+  border-radius: 999px;
+  color: var(--wine);
+  display: inline-flex;
+  font-family: Georgia, serif;
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 5px 9px;
+}
+
+.collaboration-proposals article.is-unusual > span {
+  background: #f3e8d4;
+  color: #795f32;
+}
+
+.collaboration-proposals h4 {
+  font-family: Yu Mincho, serif;
+  font-size: 1rem;
+  margin: 13px 0 10px;
+}
+
+.collaboration-proposals article p {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.85;
+  margin: 0;
+}
+
+@media (width <= 900px) {
+  .collaboration-proposals__grid,
+  .collaboration-proposals__heading {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (width <= 600px) {
+  .collaboration-proposals {
+    padding: 20px 16px;
+  }
+
+  .collaboration-proposals__heading {
+    gap: 10px;
+  }
+
+  .collaboration-proposals__heading h3 {
+    font-size: 1.35rem;
+  }
+
+  .collaboration-proposals article {
+    padding: 18px 16px;
+  }
+}
