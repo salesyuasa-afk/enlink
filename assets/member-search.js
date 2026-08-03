@@ -148,6 +148,13 @@
 
     setNativeValue(memberSelect, member.id);
     const selected = await waitFor(() => selects()[2]?.value === member.id, 2500);
+    if (selected) {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const sideIndex = [...document.querySelectorAll(".person-card")].indexOf(card);
+      const profileCard = document.querySelectorAll(".profile-fallback")[sideIndex];
+      if (sideIndex >= 0 && profileCard) restoreProfile(sideIndex, profileCard);
+      scheduleEnhance();
+    }
     status.textContent = selected ? `${member.name}さんを選択しました` : "選択を完了できませんでした。";
     return Boolean(selected);
   };
