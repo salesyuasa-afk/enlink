@@ -154,6 +154,11 @@
       const profileCard = document.querySelectorAll(".profile-fallback")[sideIndex];
       if (sideIndex >= 0 && profileCard) restoreProfile(sideIndex, profileCard);
       scheduleEnhance();
+      setTimeout(() => {
+        const latestProfileCard = document.querySelectorAll(".profile-fallback")[sideIndex];
+        if (sideIndex >= 0 && latestProfileCard) restoreProfile(sideIndex, latestProfileCard);
+        enhanceCollaborationProposals();
+      }, 300);
     }
     status.textContent = selected ? `${member.name}さんを選択しました` : "選択を完了できませんでした。";
     return Boolean(selected);
